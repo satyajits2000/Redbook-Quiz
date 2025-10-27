@@ -1,0 +1,351 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Quality General Quiz Chatbot</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f5f5f5; margin: 0; padding: 20px; }
+    .chatbot-container { max-width: 500px; margin: 40px auto; background: #fff; border-radius: 8px; box-shadow: 0 2px 12px rgba(0,0,0,0.12); padding: 20px; }
+    .chat-title {text-align: center; font-size: 1.3em; margin-bottom: 12px; font-weight: bold;}
+    .chat-history { border: 1px solid #dde; border-radius: 6px; background: #f0f8ff; min-height: 180px; max-height: 340px; padding: 12px; overflow-y: auto; margin-bottom: 15px; font-size: 1rem;}
+    .chat-message { display: flex; align-items: flex-start; margin-bottom: 10px;}
+    .chat-avatar { width:36px; height:36px; min-width:36px; min-height:36px; margin-right:10px; border-radius:50%; background:#eee; object-fit:cover; border:2px solid #dde;}
+    .bot-msg { background:#eaf3fb; border-radius: 16px; padding:9px 13px; max-width: 78%; }
+    .user { color: #222; font-weight: 600; justify-content: flex-end;}
+    .user-msg { background:#e0f4ca; border-radius:16px; padding:9px 13px; max-width: 78%; margin-left:auto;}
+    .chat-button { font-size: 1rem; background: #0073e6; color: #fff; border: none; padding: 7px 16px; border-radius: 6px; cursor: pointer; margin: 3px 0;}
+    .chat-button:hover { background: #0059b2; }
+    .citation { font-size: 0.97em; color: #565; background: #fefde4; font-style: italic; border-radius: 4px; margin: 12px 0; padding: 9px; }
+    .question { font-weight:bold; margin-bottom:8px;}
+    .option-list { margin: 8px 0;}
+    .option-list button { display:block; width:100%; text-align:left; }
+    .divider { border-top: 2px dashed #ccd; margin:19px 0 7px 0;}
+    .break-msg {color: #789; margin:5px 0 12px 0; text-align:center;}
+    select {font-size:1em; padding:2px; margin-left:8px;}
+    .match-row {margin-bottom:8px;}
+    .match-form {margin:12px 0;}
+  </style>
+</head>
+<body>
+  <div class="chatbot-container">
+    <div class="chat-title">Quality General Quiz Chatbot</div>
+    <div class="chat-history" id="chat-history"></div>
+    <div id="chat-options" class="option-list"></div>
+  </div>
+<script>
+const quizData = [
+  {
+    type:"matching",
+    question:"Match ISO codification with their certification objectives:",
+    pairs: [
+      ["ISO 9001", "Quality Management systems"],
+      ["ISO 14001", "Environmental management systems"],
+      ["ISO 45001", "Occupational health and safety management system"],
+      ["ISO 37001", "Anti-bribery management system"],
+      ["ISO 31000", "Risk Management"],
+      ["ISO 21500", "Project Management"],
+      ["ISO 26000", "Social responsibility"],
+      ["ISO 27001", "Information Security Management System"]
+    ],
+    feedback: "Here are the correct matches.",
+    citation: "Variability is the first enemy of performance (Peter Drucker)"
+  },
+  {
+    type:"mcq",
+    question:"What is the key objective of Quality Management System (ISO 9001)?",
+    options: [
+      "Create robust documentation base",
+      "Monitor closely suppliers performance to reduce costs",
+      "Increase company performance and drive customer satisfaction"
+    ],
+    answer:2,
+    feedback: "The main objective: Increase company performance and drive customer satisfaction."
+  },
+  {
+    type:"mcq",
+    question:"Do you know what the abbreviation PDCA stands for?",
+    options:[
+      "Plan / Deliver / Consult / Audit",
+      "Plan / Diagnostic / Consult / Act",
+      "Plan / Do / Check / Act"
+    ],
+    answer:2,
+    feedback:"PDCA stands for Plan / Do / Check / Act."
+  },
+  {
+    type:"mcq",
+    question: "What is the key objective of PDCA method?",
+    options: [
+      "Structure the process reviews",
+      "Design cycle of continuous improvement for process optimization",
+      "Define the system of company management"
+    ],
+    answer:1,
+    feedback: "PDCA is a design cycle for continuous improvement."
+  },
+  {
+    type:"info",
+    citation:"Who stops improving, stops being good (Oliver Cromwell)"
+  },
+  {
+    type:"mcq",
+    question:"Kaizen – term known within lean management as:",
+    options: [
+      "Continuous improvement of performance (quality, cost, time)",
+      "Continuous improvement of quality",
+      "Change management"
+    ],
+    answer:0,
+    link:"https://www.youtube.com/watch?v=NFrwxzUhfNA&pp=ygUTa2FpemVuIGxlYW4gZW5nbGlzaA%3D%3D",
+    feedback: "Kaizen means continuous improvement of performance."
+  },
+  {
+    type:"info",
+    citation:"Quality is everyone’s responsibility (W. Edwards DEMING)"
+  },
+  {
+    type:"mcq",
+    question:"In Systra our management system is:",
+    options: [ "Not formalized", "Managed out of operations", "Integrated" ],
+    answer:2,
+    feedback: "Systra has an integrated management system."
+  },
+  {
+    type:"mcq",
+    question:"Common and unique platform to support our IMS (SMI) is:",
+    options: [ "MySMI", "Teams IMS community", "Communication web page" ],
+    answer:0,
+    feedback: "MySMI is the main platform."
+  },
+  {
+    type:"info",
+    citation:'You should know “Group IMS Charter” (Systra Group IMS team 😊)'
+  },
+  {
+    type:"mcq",
+    question: "What are the Group Policies within our IMS (SMI)?",
+    options: [
+      "General Policy, 3S Policy, Ethics and compliance Policy",
+      "General Policy, 3S Policy, Ethics and compliance Policy, Sustainability Policy",
+      "General Policy, 3S Policy, Ethics and compliance Policy, Sustainability Policy, 9 Saving Rules, Anticorruption Code"
+    ],
+    answer:2,
+    feedback:"Correct! All listed policies are part of IMS."
+  },
+  {
+    type:"info",
+    citation:'Check all the Policies regularly in MySMI (Systra Group IMS team 😊)'
+  },
+  {
+    type:"mcq",
+    question:"What is the Group Framework that establish all minimum requirements every entity / Business Unit must comply with?",
+    options:["White papers","Green Book","Red Book"],
+    answer:2,
+    feedback:"Red Book sets all minimum requirements."
+  },
+  {
+    type:"info",
+    citation:'Red Book is the best reading for your coffee breaks (Systra Group IMS team 😊)'
+  },
+  {
+    type:"mcq",
+    question:"Who is managing IMS (SMI), MySMI and Red Book in Systra?",
+    options:[
+      "Project managers in India",
+      "Group Legal team in Paris",
+      "Group Internal Control team in Paris"
+    ],
+    answer:2,
+    feedback:"Group Internal Control team in Paris manages IMS (SMI), MySMI, and Red Book."
+  }
+];
+
+const citations = quizData.filter(q => q.type==="info").map(q => q.citation);
+
+let currentQuestion = 0;
+const chatHistory = document.getElementById('chat-history');
+const optionsDiv = document.getElementById('chat-options');
+const totalQ = quizData.filter(q=>q.type==="mcq"||q.type==="matching").length;
+
+function addMessage(message, sender = 'bot') {
+  const msgDiv = document.createElement('div');
+  msgDiv.classList.add('chat-message');
+  if(sender === 'bot') {
+    msgDiv.innerHTML = `<img src="chatbot.jpg" alt="bot" class="chat-avatar" />
+      <div class="bot-msg">${message}</div>`;
+  } else {
+    msgDiv.classList.add('user');
+    msgDiv.innerHTML = `<div class="user-msg">${message}</div>`;
+  }
+  chatHistory.appendChild(msgDiv);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function addDivider() {
+  const div = document.createElement('div');
+  div.className = "divider";
+  chatHistory.appendChild(div);
+}
+
+// Fisher-Yates shuffle for arrays
+function shuffle(array) {
+  let m = array.length, t, i;
+  while (m) {
+    i = Math.floor(Math.random() * m--);
+    t = array[m];
+    array[m] = array[i];
+    array[i] = t;
+  }
+  return array;
+}
+
+function showMatching(pairs, feedback, citation) {
+  addDivider();
+  const qNumber = getQuestionNumber();
+  addMessage(`<span class="question">Question ${qNumber}/${totalQ}: Match the following ISO standards</span>`, 'bot');
+  // produce a *shuffled* objectives array (new for every matching question show)
+  const objectivesOrig = Array.from(new Set(pairs.map(x => x[1])));
+  const objectivesShuffled = shuffle(objectivesOrig.slice()); // do not shuffle original, use a copy
+  const form = document.createElement('form');
+  form.className = 'match-form';
+  form.onsubmit = (e)=>{ e.preventDefault(); };
+  optionsDiv.innerHTML = '';
+  pairs.forEach(([iso, correct], idx) => {
+    const row = document.createElement('div');
+    row.className = 'match-row';
+    row.innerHTML = `<label><b>${iso}</b></label>`;
+    const select = document.createElement('select');
+    objectivesShuffled.forEach(option => {
+      const opt = document.createElement('option');
+      opt.value = option;
+      opt.textContent = option;
+      select.appendChild(opt);
+    });
+    row.appendChild(select);
+    form.appendChild(row);
+  });
+  const submitBtn = document.createElement('button');
+  submitBtn.type='button';
+  submitBtn.className = 'chat-button';
+  submitBtn.textContent = 'Submit Matches';
+  submitBtn.onclick = () => {
+    let correctCount = 0;
+    pairs.forEach(([iso, correct], idx) => {
+      const userAns = form.children[idx].querySelector('select').value;
+      if (userAns === correct) correctCount++;
+    });
+    addMessage(
+      `You got ${correctCount} out of ${pairs.length} correct.`, 'user'
+    );
+    setTimeout(()=>{
+      // Show correct matches
+      let correctHtml = `<div><b>${feedback}</b></div><ul>`;
+      pairs.forEach(([iso, correct]) => {
+        correctHtml += `<li><b>${iso}</b>: ${correct}</li>`;
+      });
+      correctHtml += `</ul>`;
+      addMessage(correctHtml, 'bot');
+      addMessage(`<div class='citation'>${citation}</div>`, 'bot');
+      showBreak();
+    }, 1200);
+    optionsDiv.innerHTML = '';
+  };
+  form.appendChild(submitBtn);
+  optionsDiv.appendChild(form);
+}
+
+function showMCQ(question, options, answerIdx, feedback, link) {
+  addDivider();
+  const qNumber = getQuestionNumber();
+  addMessage(`<span class="question">Question ${qNumber}/${totalQ}: ${question}</span>`, 'bot');
+  optionsDiv.innerHTML = '';
+  options.forEach((opt,i) => {
+    const btn = document.createElement('button');
+    btn.className = 'chat-button';
+    btn.innerText = opt;
+    btn.onclick = () => {
+      addMessage(opt, 'user');
+      setTimeout(()=>{
+        if (i===answerIdx) {
+          addMessage("✅ Correct!", 'bot');
+        } else {
+          addMessage("❌ Incorrect.", 'bot');
+        }
+        addMessage(feedback, 'bot');
+        if(link) addMessage(`<a href='${link}' target='_blank'>Watch: Kaizen explained (YouTube)</a>`, 'bot');
+        showBreak();
+      }, 900);
+      optionsDiv.innerHTML = '';
+    }
+    optionsDiv.appendChild(btn);
+  });
+}
+
+function showBreak() {
+  optionsDiv.innerHTML = '';
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'break-msg';
+  msgDiv.innerHTML = "Preparing the next question, please wait...";
+  chatHistory.appendChild(msgDiv);
+  chatHistory.scrollTop = chatHistory.scrollHeight;
+  setTimeout(nextQuestion, 1300);
+}
+
+function showCitation(text) {
+  optionsDiv.innerHTML = '';
+  addMessage(`<div class='citation'>${text}</div>`, 'bot');
+  showBreak();
+}
+
+function getQuestionNumber() {
+  let count = 1;
+  for (let i=0; i<=currentQuestion; i++) {
+    if (quizData[i] && (quizData[i].type==="mcq"||quizData[i].type==="matching")) {
+      if (i === currentQuestion) return count;
+      count++;
+    }
+  }
+  return "";
+}
+
+function nextQuestion() {
+  currentQuestion++;
+  if(currentQuestion>=quizData.length) {
+    optionsDiv.innerHTML='';
+    addDivider();
+    addMessage('<b>Quiz finished! Here are some key citations:</b>', 'bot');
+    citations.forEach(c=>addMessage(`<div class='citation'>${c}</div>`, 'bot'));
+  } else {
+    showQuestion();
+  }
+}
+
+function showQuestion() {
+  const q = quizData[currentQuestion];
+  if (q.type==="matching") {
+    showMatching(q.pairs, q.feedback, q.citation);
+  }
+  else if (q.type==="mcq") {
+    showMCQ(q.question, q.options, q.answer, q.feedback, q.link);
+  }
+  else if (q.type==="info") {
+    showCitation(q.citation);
+  }
+}
+
+addMessage('Welcome to the SYSTRA Quality General Quiz! Ready to start?', 'bot');
+setTimeout(()=>{
+  addMessage('Let\'s begin...', 'bot');
+  setTimeout(()=>{
+    showQuestion();
+  }, 700);
+}, 1200);
+
+</script>
+</body>
+</html>
+
+
+
