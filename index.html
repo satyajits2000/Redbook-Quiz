@@ -335,6 +335,19 @@ window.firebaseUpdate = async function(data) {
   if (!participantRef) return;
   try { await set(participantRef, data); } catch {}
 };
+
+// Resume support
+window._getSessionId = function() { return sessionId; };
+window.firebaseFetchParticipant = async function(sid, pid) {
+  if (!db) return null;
+  try {
+    const snap = await get(ref(db, `sessions/${sid}/participants/${pid}`));
+    return snap.exists() ? snap.val() : null;
+  } catch { return null; }
+};
+window.firebaseSetParticipantRef = function(sid, pid) {
+  participantRef = ref(db, `sessions/${sid}/participants/${pid}`);
+};
 </script>
 
 <!-- ══════════════════════════════════════════════
@@ -389,7 +402,16 @@ function startQuiz() {
     score : 0, progress : 0, status : 'in_progress', answers: []
   };
 
-  if (window.firebaseRegister) window.firebaseRegister(participantMeta);
+  if (window.firebaseRegister) {
+    window.firebaseRegister(participantMeta).then(function(key) {
+      if (key) {
+        const sid = window._getSessionId ? window._getSessionId() : sessionId;
+        localStorage.setItem('systra_redbook_resume', JSON.stringify({
+          sessionId: sid, participantId: key
+        }));
+      }
+    });
+  }
 
   document.getElementById('reg-gate').style.display      = 'none';
   document.getElementById('chatbot-container').style.display = 'block';
@@ -468,6 +490,7 @@ function nextQuestion() {
     participantMeta.endTime   = new Date().toISOString();
     participantMeta.finalScore = totalCorrect;
     if (window.firebaseUpdate) window.firebaseUpdate(participantMeta);
+    localStorage.removeItem('systra_redbook_resume');
 
     document.getElementById('certificateSection').style.display = 'block';
     document.getElementById('certDate').value = new Date().toLocaleDateString();
@@ -583,6 +606,69 @@ function showWelcome(index = 0) {
     setTimeout(showQuestion, 800);
   }
 }
+// ── Resume-on-load ─────────────────────────────────────────────────────────
+(async function() {
+  const saved = localStorage.getItem('systra_redbook_resume');
+  if (!saved) return;
+  let info;
+  try { info = JSON.parse(saved); } catch { return; }
+  if (!info.sessionId || !info.participantId) return;
+
+  // Show a resume banner on the reg gate
+  const banner = document.createElement('div');
+  banner.style.cssText = 'background:#fff3cd;border:1px solid #ffc107;border-radius:6px;padding:12px 16px;margin-bottom:14px;font-size:0.88em;display:flex;align-items:center;justify-content:space-between;gap:10px;';
+  banner.innerHTML = '<span>&#9654; You have an incomplete quiz. <b>Resume where you left off?</b></span>' +
+    '<div style="display:flex;gap:8px">' +
+    '<button id="btn-resume" style="background:#003e4a;color:#fff;border:none;border-radius:5px;padding:6px 12px;cursor:pointer;font-size:0.85em">Resume</button>' +
+    '<button id="btn-fresh" style="background:transparent;color:#666;border:1px solid #ccc;border-radius:5px;padding:6px 12px;cursor:pointer;font-size:0.85em">Start fresh</button>' +
+    '</div>';
+
+  const regBody = document.querySelector('.reg-body');
+  if (regBody) regBody.insertBefore(banner, regBody.firstChild);
+
+  document.getElementById('btn-fresh').onclick = function() {
+    localStorage.removeItem('systra_redbook_resume');
+    banner.remove();
+  };
+
+  document.getElementById('btn-resume').onclick = async function() {
+    if (!window.firebaseFetchParticipant) { banner.remove(); return; }
+    const data = await window.firebaseFetchParticipant(info.sessionId, info.participantId);
+    if (!data) { alert('Could not load your previous session.'); return; }
+
+    // If quiz was already completed, clear localStorage and hide banner
+    if (data.status === 'completed') {
+      localStorage.removeItem('systra_redbook_resume');
+      banner.remove();
+      return;
+    }
+
+    participantMeta = data;
+    currentQuestion = Math.min(data.progress || 0, quizData.length - 1);
+    totalCorrect    = data.score || 0;
+
+    // Re-attach Firebase ref so updates go to the right place
+    if (window.firebaseSetParticipantRef) {
+      window.firebaseSetParticipantRef(info.sessionId, info.participantId);
+    }
+
+    document.getElementById('reg-gate').style.display = 'none';
+    document.getElementById('chatbot-container').style.display = 'block';
+    document.getElementById('participant-bar').textContent = data.name || '';
+    document.getElementById('score-bar').textContent = 'Score: ' + totalCorrect;
+    document.getElementById('userName').value = data.name || '';
+    document.getElementById('certDate').value = new Date().toLocaleDateString();
+
+    // Show session name
+    if (document.getElementById('session-name-display') && data.sessionName) {
+      document.getElementById('session-name-display').textContent = data.sessionName;
+    }
+
+    addMessage('&#8618; <b>Resuming from question ' + (currentQuestion + 1) + '.</b> Welcome back, ' + (data.name || 'participant') + '!');
+    setTimeout(showQuestion, 600);
+  };
+})();
+
 </script>
 </body>
 </html>
