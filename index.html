@@ -407,13 +407,12 @@ function startQuiz() {
       if (key) {
         const sid = window._getSessionId ? window._getSessionId() : sessionId;
         const resumeData = { sessionId: sid, participantId: key };
-        localStorage.setItem('systra_redbook_resume', JSON.stringify(resumeData));
-        // Also encode in URL so iOS Safari can resume even if localStorage is blocked
+        // Save to localStorage (fast, in-session)
+        try { localStorage.setItem('systra_redbook_resume', JSON.stringify(resumeData)); } catch(e) {}
+        // Save to cookie (survives iOS Safari ITP & app restarts) — 30-day expiry
         try {
-          const token = btoa(sid + ':' + key);
-          const url = new URL(window.location.href);
-          url.searchParams.set('r', token);
-          window.history.replaceState(null, '', url.toString());
+          const expires = new Date(Date.now() + 30*24*60*60*1000).toUTCString();
+          document.cookie = 'systra_redbook_resume=' + encodeURIComponent(JSON.stringify(resumeData)) + '; expires=' + expires + '; path=/; SameSite=Lax';
         } catch(e) {}
       }
     });
@@ -496,7 +495,8 @@ function nextQuestion() {
     participantMeta.endTime   = new Date().toISOString();
     participantMeta.finalScore = totalCorrect;
     if (window.firebaseUpdate) window.firebaseUpdate(participantMeta);
-    localStorage.removeItem('systra_redbook_resume');
+    try { localStorage.removeItem('systra_redbook_resume'); } catch(e) {}
+    _rbClearResumeCookie();
 
     document.getElementById('certificateSection').style.display = 'block';
     document.getElementById('certDate').value = new Date().toLocaleDateString();
@@ -613,15 +613,30 @@ function showWelcome(index = 0) {
   }
 }
 // ── Resume-on-load ─────────────────────────────────────────────────────────
+// iOS Safari ITP Fix: read from cookie (most reliable) → localStorage → URL param
+function _rbReadResumeCookie() {
+  try {
+    const match = document.cookie.split('; ').find(r => r.startsWith('systra_redbook_resume='));
+    if (match) return JSON.parse(decodeURIComponent(match.split('=').slice(1).join('=')));
+  } catch(e) {}
+  return null;
+}
+function _rbClearResumeCookie() {
+  try { document.cookie = 'systra_redbook_resume=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax'; } catch(e) {}
+}
 (async function() {
-  // Try localStorage first, then fall back to URL param (for iOS Safari)
   let info = null;
-  const saved = localStorage.getItem('systra_redbook_resume');
-  if (saved) {
-    try { info = JSON.parse(saved); } catch {}
-  }
+  // 1. Try cookie first (survives iOS Safari ITP)
+  info = _rbReadResumeCookie();
+  // 2. Try localStorage
   if (!info || !info.sessionId || !info.participantId) {
-    // Try URL param
+    try {
+      const saved = localStorage.getItem('systra_redbook_resume');
+      if (saved) info = JSON.parse(saved);
+    } catch {}
+  }
+  // 3. Try URL param (for deep-link QR codes)
+  if (!info || !info.sessionId || !info.participantId) {
     try {
       const url = new URL(window.location.href);
       const token = url.searchParams.get('r');
@@ -630,10 +645,16 @@ function showWelcome(index = 0) {
         const sep = decoded.indexOf(':');
         if (sep > 0) {
           info = { sessionId: decoded.slice(0, sep), participantId: decoded.slice(sep + 1) };
-          // Write back to localStorage so subsequent loads are faster
-          localStorage.setItem('systra_redbook_resume', JSON.stringify(info));
         }
       }
+    } catch {}
+  }
+  // Write back to cookie and localStorage so all paths are synced
+  if (info && info.sessionId && info.participantId) {
+    try { localStorage.setItem('systra_redbook_resume', JSON.stringify(info)); } catch {}
+    try {
+      const expires = new Date(Date.now() + 30*24*60*60*1000).toUTCString();
+      document.cookie = 'systra_redbook_resume=' + encodeURIComponent(JSON.stringify(info)) + '; expires=' + expires + '; path=/; SameSite=Lax';
     } catch {}
   }
   if (!info || !info.sessionId || !info.participantId) return;
@@ -651,8 +672,8 @@ function showWelcome(index = 0) {
   if (regBody) regBody.insertBefore(banner, regBody.firstChild);
 
   document.getElementById('btn-fresh').onclick = function() {
-    localStorage.removeItem('systra_redbook_resume');
-    // Clear URL param too
+    try { localStorage.removeItem('systra_redbook_resume'); } catch(e) {}
+    _rbClearResumeCookie();
     try {
       const url = new URL(window.location.href);
       url.searchParams.delete('r');
@@ -666,9 +687,10 @@ function showWelcome(index = 0) {
     const data = await window.firebaseFetchParticipant(info.sessionId, info.participantId);
     if (!data) { alert('Could not load your previous session.'); return; }
 
-    // If quiz was already completed, clear localStorage + URL param and hide banner
+    // If quiz was already completed, clear cookie + localStorage + URL param and hide banner
     if (data.status === 'completed') {
-      localStorage.removeItem('systra_redbook_resume');
+      try { localStorage.removeItem('systra_redbook_resume'); } catch(e) {}
+      _rbClearResumeCookie();
       try {
         const url = new URL(window.location.href);
         url.searchParams.delete('r');
