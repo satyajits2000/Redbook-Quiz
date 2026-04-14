@@ -406,9 +406,15 @@ function startQuiz() {
     window.firebaseRegister(participantMeta).then(function(key) {
       if (key) {
         const sid = window._getSessionId ? window._getSessionId() : sessionId;
-        localStorage.setItem('systra_redbook_resume', JSON.stringify({
-          sessionId: sid, participantId: key
-        }));
+        const resumeData = { sessionId: sid, participantId: key };
+        localStorage.setItem('systra_redbook_resume', JSON.stringify(resumeData));
+        // Also encode in URL so iOS Safari can resume even if localStorage is blocked
+        try {
+          const token = btoa(sid + ':' + key);
+          const url = new URL(window.location.href);
+          url.searchParams.set('r', token);
+          window.history.replaceState(null, '', url.toString());
+        } catch(e) {}
       }
     });
   }
@@ -608,11 +614,29 @@ function showWelcome(index = 0) {
 }
 // ── Resume-on-load ─────────────────────────────────────────────────────────
 (async function() {
+  // Try localStorage first, then fall back to URL param (for iOS Safari)
+  let info = null;
   const saved = localStorage.getItem('systra_redbook_resume');
-  if (!saved) return;
-  let info;
-  try { info = JSON.parse(saved); } catch { return; }
-  if (!info.sessionId || !info.participantId) return;
+  if (saved) {
+    try { info = JSON.parse(saved); } catch {}
+  }
+  if (!info || !info.sessionId || !info.participantId) {
+    // Try URL param
+    try {
+      const url = new URL(window.location.href);
+      const token = url.searchParams.get('r');
+      if (token) {
+        const decoded = atob(token);
+        const sep = decoded.indexOf(':');
+        if (sep > 0) {
+          info = { sessionId: decoded.slice(0, sep), participantId: decoded.slice(sep + 1) };
+          // Write back to localStorage so subsequent loads are faster
+          localStorage.setItem('systra_redbook_resume', JSON.stringify(info));
+        }
+      }
+    } catch {}
+  }
+  if (!info || !info.sessionId || !info.participantId) return;
 
   // Show a resume banner on the reg gate
   const banner = document.createElement('div');
@@ -628,6 +652,12 @@ function showWelcome(index = 0) {
 
   document.getElementById('btn-fresh').onclick = function() {
     localStorage.removeItem('systra_redbook_resume');
+    // Clear URL param too
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('r');
+      window.history.replaceState(null, '', url.toString());
+    } catch(e) {}
     banner.remove();
   };
 
@@ -636,9 +666,14 @@ function showWelcome(index = 0) {
     const data = await window.firebaseFetchParticipant(info.sessionId, info.participantId);
     if (!data) { alert('Could not load your previous session.'); return; }
 
-    // If quiz was already completed, clear localStorage and hide banner
+    // If quiz was already completed, clear localStorage + URL param and hide banner
     if (data.status === 'completed') {
       localStorage.removeItem('systra_redbook_resume');
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete('r');
+        window.history.replaceState(null, '', url.toString());
+      } catch(e) {}
       banner.remove();
       return;
     }
